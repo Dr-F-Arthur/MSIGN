@@ -29,45 +29,50 @@ The code has been tested on the following systems:
 **Python Dependencies** <br />
 We recommend using `anaconda3` to set up a Python virtual environment. This software has been tested with core libraries:
 ```
-python
-cloudpickle
-contourpy
-cycler
-dgl
-dgllife
-dill
-fonttools
-future
-hyperopt
-importlib-resources
-joblib
-kiwisolver
-matplotlib
-multiprocess
-networkx
-numpy
-pandas
-pillow
-py4j
-pymol
-pyparsing
-python-dateutil
-pytz
-rdkit
-scikit-learn
-scipy
-seaborn
-six
-threadpoolctl
-torch
-tqdm
-tzdata
-zipp
+# MSIGN Core Dependencies
+# Python 3.9 recommended
+
+torch==1.12.1
+dgl==0.9.1
+numpy==1.26.0
+pandas==2.2.3
+rdkit==2024.9.1
+scipy==1.13.1
+scikit-learn==0.24.2
+dgllife==0.3.0
+networkx==3.2.1
+tqdm==4.67.1
 ```
-For a more detailed list of required libraries, please refer to environment.yaml.
+For a more detailed list of required libraries, please refer to requirements.txt or environment_full_version.yaml.
 
 # RUN MSIGN
 ## Training & Fine-tuning
+Before any training can begin, the compounds need to be preprocessed. Please run the following code:
+```
+python preprocess_complex.py
+```
+
+Next, you need to generate the DGL graph file. Please run the following code:
+```
+python graph_constructor.py
+```
+
+In fact, these two files are actually more often called and executed rather than run independently. The method of calling them is as follows:
+```
+from torch.utils.data import DataLoader
+from preprocess_complex import generate_pocket,generate_complex
+from graph_constructor import GraphDataset, collate_fn
+```
+
+If you want to pre-train, you can run the following code.
+```
+python train.py
+```
+If you want to fine-tune the model, you can run the following code.
+```
+python finetune.py
+```
+
 You can use the train.py and finetune.py files located in the train directory to perform training and fine-tuning.
 
 ## Prediction
@@ -75,7 +80,7 @@ You can run `predict_single.py` or modify it and then run it.
 ```
 python predict_single.py
 ```
-Of course, you can also use `toy_test.ipynb` to understand the complete process required to predict affinity using this model. This project includes a toy example.
+Of course, you can also use `toy_test.ipynb` to understand the complete process required to predict affinity using this model. This project includes a toy example.This version is more readable and easier to use compared to predict_single.py.Its content includes instructions on how to preprocess complex data, generate DGL graph files, and predict binding affinity.
 
 ## notice
 Please note, you can create new folders and add the corresponding required files to predict the structure you need. Be sure to pre-dock your ligand and receptor files (i.e., 5xr8.pdb); otherwise, arbitrary ligand files cannot be predicted.
