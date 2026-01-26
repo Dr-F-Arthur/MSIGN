@@ -75,7 +75,7 @@ You can run `predict_single.py` or modify it and then run it.
 ```
 python predict_single.py
 ```
-Of course, you can also use toy_test.ipynb to understand the complete process required to predict affinity using this model. This project includes a toy example.
+Of course, you can also use `toy_test.ipynb` to understand the complete process required to predict affinity using this model. This project includes a toy example.
 
 ## notice
 Please note, you can create new folders and add the corresponding required files to predict the structure you need. Be sure to pre-dock your ligand and receptor files (i.e., 5xr8.pdb); otherwise, arbitrary ligand files cannot be predicted.
