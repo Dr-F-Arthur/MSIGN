@@ -1,0 +1,168 @@
+# %%
+import os
+
+os.environ['CUDA_VISIBLE_DEVICES'] = "1, 6"
+
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader
+
+from graph_constructor import GraphDataset, collate_fn
+from MSIGN import MSIGN
+
+import time
+import numpy as np
+import pandas as pd
+from sklearn.metrics import mean_squared_error
+from scipy.stats import pearsonr
+import warnings
+
+from config.config_dict import *
+from log.train_logger import *
+from utils import *
+
+warnings.filterwarnings('ignore')
+
+
+# %%
+def val(model, dataloader, device):
+    model.eval()
+
+    pred_list = []
+    label_list = []
+    for data in dataloader:
+        bg, label = data
+        bg, label = bg.to(device), label.to(device)
+
+        with torch.no_grad():
+            pred_lp, pred_pl = model(bg)
+            pred = (pred_lp + pred_pl) / 2
+            pred_list.append(pred.detach().cpu().numpy())
+            label_list.append(label.detach().cpu().numpy())
+
+    pred = np.concatenate(pred_list, axis=0)
+    label = np.concatenate(label_list, axis=0)
+    pr = pearsonr(pred, label)[0]
+    rmse = np.sqrt(mean_squared_error(label, pred))
+
+    model.train()
+
+    return rmse, pr
+
+
+if __name__ == '__main__':
+    cfg = 'TrainConfig'
+    config = Config(cfg)
+    args = config.get_config()
+    graph_type = args.get("graph_type")
+    save_model = args.get("save_model")
+    batch_size = args.get("batch_size")
+    data_root = args.get('data_root')
+    epochs = args.get('epochs')
+    repeats = args.get('repeat')
+    early_stop_epoch = args.get("early_stop_epoch")
+
+    for repeat in range(repeats):
+        args['repeat'] = repeat
+
+        toy_dir = os.path.join(data_root, 'out')
+        # toy_df = pd.read_csv(os.path.join(data_root, "cb1_ic50.csv")).sample(frac=1., random_state=123)
+        train_df = pd.read_csv(os.path.join(data_root, "train_scaffold1.csv")).sample(frac=1.)
+        valid_df = pd.read_csv(os.path.join(data_root, "valid_scaffold1.csv")).sample(frac=1.)
+
+
+        # split_idx = int(0.8 * len(toy_df))
+        # train_df = toy_df.iloc[:split_idx]
+        # valid_df = toy_df.iloc[split_idx:]
+
+        train_set = GraphDataset(toy_dir, train_df, graph_type=graph_type, create=False)
+        valid_set = GraphDataset(toy_dir, valid_df, graph_type=graph_type, create=False)
+
+        # train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, collate_fn=collate_fn, num_workers=8)
+        # valid_loader = DataLoader(valid_set, batch_size=batch_size, shuffle=False, collate_fn=collate_fn, num_workers=8)
+        train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
+        valid_loader = DataLoader(valid_set, batch_size=batch_size, shuffle=False, collate_fn=collate_fn)
+
+        logger = TrainLogger(args, cfg, create=True)
+        logger.info(__file__)
+        logger.info(f"train data: {len(train_set)}")
+        logger.info(f"valid_data: {len(valid_set)}")
+
+        device = torch.device('cuda:0')
+        model = MSIGN(node_feat_size=35, edge_feat_size=17, hidden_feat_size=256, layer_num=3).to(device)
+        # model.load_state_dict(torch.load("./model/20240706_122916_EHIGN_repeat2/model/epoch-226, train_loss-0.3666, train_rmse-0.6055, valid_rmse-1.2167, valid_pr-0.7494.pt"))
+        model.load_state_dict(torch.load("./model/20250408_013300_MSIGN_repeat0/model/epoch-220, valid_rmse-1.2420, valid_pr-0.7330.pt"))
+        # load_model_dict(model,'./model/20240706_122916_EHIGN_repeat2/model/epoch-226, train_loss-0.3666, train_rmse-0.6055, valid_rmse-1.2167, valid_pr-0.7494.pt')
+
+        # for param in model.parameters():
+        #     param.requires_grad = False
+        #
+        # for param in model.chemfea_ligandpocket.fc.predict.parameters():
+        #     param.requires_grad = True
+        #
+        # for param in model.chemfea_pocketligand.fc.predict.parameters():
+        #     param.requires_grad = True
+        #
+        # optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=1e-4, weight_decay=1e-6)
+
+
+
+        optimizer = optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-6)
+
+        criterion = nn.MSELoss()
+
+        running_loss = AverageMeter()
+        running_acc = AverageMeter()
+        running_best_mse = BestMeter("min")
+        best_model_list = []
+
+        # start training
+        # print(model)
+        model.train()
+        for epoch in range(epochs):
+            for data in train_loader:
+                bg, label = data
+                bg, label = bg.to(device), label.to(device)
+
+                pred_lp, pred_pl = model(bg)
+                loss = (criterion(pred_lp, label) + criterion(pred_pl, label) + criterion(pred_lp, pred_pl)) / 3
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+
+                running_loss.update(loss.item(), label.size(0))
+
+            epoch_loss = running_loss.get_average()
+            epoch_rmse = np.sqrt(epoch_loss)
+            running_loss.reset()
+
+            # start validating
+            valid_rmse, valid_pr = val(model, valid_loader, device)
+            msg = "epoch-%d, train_loss-%.4f, train_rmse-%.4f, valid_rmse-%.4f, valid_pr-%.4f" \
+                  % (epoch, epoch_loss, epoch_rmse, valid_rmse, valid_pr)
+            logger.info(msg)
+
+            if valid_rmse < running_best_mse.get_best():
+                running_best_mse.update(valid_rmse)
+                if save_model:
+                    msg = "epoch-%d, train_loss-%.4f, train_rmse-%.4f, valid_rmse-%.4f, valid_pr-%.4f" \
+                          % (epoch, epoch_loss, epoch_rmse, valid_rmse, valid_pr)
+                    model_path = os.path.join(logger.get_model_dir(), msg + '.pt')
+                    best_model_list.append(model_path)
+                    # save_model_dict(model, logger.get_model_dir(), msg)
+                    torch.save(model.state_dict(), model_path)
+                    print("model has been saved to %s." % (model_path))
+            else:
+                count = running_best_mse.counter()
+                if count > early_stop_epoch:
+                    best_mse = running_best_mse.get_best()
+                    msg = "best_rmse: %.4f" % best_mse
+                    logger.info(f"early stop in epoch {epoch}")
+                    logger.info(msg)
+                    break_flag = True
+                    break
+
+            time.sleep(1)
+
+# %%
