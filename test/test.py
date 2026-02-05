@@ -16,8 +16,8 @@ from graph_constructor import GraphDataset, collate_fn
 from MSIGN import MSIGN
 from utils import load_model_dict
 
-from sklearn.metrics import mean_squared_error
-from scipy.stats import pearsonr
+from sklearn.metrics import mean_squared_error, mean_absolute_error
+from scipy.stats import pearsonr, spearmanr
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -42,11 +42,13 @@ def val(model, dataloader, device):
     pred = np.concatenate(pred_list, axis=0)
     label = np.concatenate(label_list, axis=0)
     pr = pearsonr(pred, label)[0]
+    sr = spearmanr(pred, label)[0]
     rmse = np.sqrt(mean_squared_error(label, pred))
+    mae = mean_absolute_error(label, pred)
 
     model.train()
 
-    return rmse, pr, pred, label
+    return rmse, mae, pr, sr, pred, label
 
 
 if __name__ == '__main__':
@@ -55,6 +57,7 @@ if __name__ == '__main__':
     data_root = os.path.join(project_root, 'data')
 
     # Data directory (all graph files for the test sets are located in the v2020-other-PL directory)
+    # you need to go to zenodo download Lppdb data
     graph_data_dir = os.path.join(data_root, 'PDBBind','Lppdb')
 
     # Read the CSV file and rename the column names to match the format expected by graph_constructor.
@@ -100,9 +103,9 @@ if __name__ == '__main__':
 
     # Store the results of each experiment.
     results = {
-        'test2013_rmse': [], 'test2013_pr': [],
-        'test2016_rmse': [], 'test2016_pr': [],
-        'test2019_rmse': [], 'test2019_pr': []
+        'test2013_rmse': [], 'test2013_mae': [], 'test2013_pr': [], 'test2013_sr': [],
+        'test2016_rmse': [], 'test2016_mae': [], 'test2016_pr': [], 'test2016_sr': [],
+        'test2019_rmse': [], 'test2019_mae': [], 'test2019_pr': [], 'test2019_sr': [],
     }
 
     # The experiment was repeated three times.
@@ -116,9 +119,9 @@ if __name__ == '__main__':
         load_model_dict(model, model_path)
 
         # External test set evaluation
-        test2013_rmse, test2013_pr, test2013_pred, test2013_label = val(model, test2013_loader, device)
-        test2016_rmse, test2016_pr, test2016_pred, test2016_label = val(model, test2016_loader, device)
-        test2019_rmse, test2019_pr, test2019_pred, test2019_label = val(model, test2019_loader, device)
+        test2013_rmse, test2013_mae, test2013_pr, test2013_sr, test2013_pred, test2013_label = val(model, test2013_loader, device)
+        test2016_rmse, test2016_mae, test2016_pr, test2016_sr, test2016_pred, test2016_label = val(model, test2016_loader, device)
+        test2019_rmse, test2019_mae, test2019_pr, test2019_sr, test2019_pred, test2019_label = val(model, test2019_loader, device)
 
         # Save the prediction results to a CSV file.
         test2013_result = pd.DataFrame({
@@ -146,15 +149,25 @@ if __name__ == '__main__':
 
         # Store the results.
         results['test2013_rmse'].append(test2013_rmse)
+        results['test2013_mae'].append(test2013_mae)
         results['test2013_pr'].append(test2013_pr)
+        results['test2013_sr'].append(test2013_sr)
         results['test2016_rmse'].append(test2016_rmse)
+        results['test2016_mae'].append(test2016_mae)
         results['test2016_pr'].append(test2016_pr)
+        results['test2016_sr'].append(test2016_sr)
         results['test2019_rmse'].append(test2019_rmse)
+        results['test2019_mae'].append(test2019_mae)
         results['test2019_pr'].append(test2019_pr)
+        results['test2019_sr'].append(test2019_sr)
 
         # Print single result
-        msg = "test2013_rmse-%.4f, test2013_pr-%.4f, test2016_rmse-%.4f, test2016_pr-%.4f, test2019_rmse-%.4f, test2019_pr-%.4f" \
-              % (test2013_rmse, test2013_pr, test2016_rmse, test2016_pr, test2019_rmse, test2019_pr)
+        msg = "test2013: RMSE-%.4f, MAE-%.4f, PR-%.4f, SR-%.4f\n" \
+              "test2016: RMSE-%.4f, MAE-%.4f, PR-%.4f, SR-%.4f\n" \
+              "test2019: RMSE-%.4f, MAE-%.4f, PR-%.4f, SR-%.4f" \
+              % (test2013_rmse, test2013_mae, test2013_pr, test2013_sr,
+                 test2016_rmse, test2016_mae, test2016_pr, test2016_sr,
+                 test2019_rmse, test2019_mae, test2019_pr, test2019_sr)
         print(msg)
 
     # Calculate the mean and standard deviation.
@@ -164,13 +177,20 @@ if __name__ == '__main__':
 
     for dataset in ['test2013', 'test2016', 'test2019']:
         rmse_key = f'{dataset}_rmse'
+        mae_key = f'{dataset}_mae'
         pr_key = f'{dataset}_pr'
+        sr_key = f'{dataset}_sr'
 
         rmse_mean = np.mean(results[rmse_key])
         rmse_std = np.std(results[rmse_key])
+        mae_mean = np.mean(results[mae_key])
+        mae_std = np.std(results[mae_key])
         pr_mean = np.mean(results[pr_key])
         pr_std = np.std(results[pr_key])
+        sr_mean = np.mean(results[sr_key])
+        sr_std = np.std(results[sr_key])
 
-        print(f"{dataset}: RMSE = {rmse_mean:.4f} ± {rmse_std:.4f}, PR = {pr_mean:.4f} ± {pr_std:.4f}")
+        print(f"{dataset}: RMSE = {rmse_mean:.4f} ± {rmse_std:.4f}, MAE = {mae_mean:.4f} ± {mae_std:.4f}, "
+              f"PR = {pr_mean:.4f} ± {pr_std:.4f}, SR = {sr_mean:.4f} ± {sr_std:.4f}")
 
 # %%
