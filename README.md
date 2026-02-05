@@ -40,6 +40,12 @@ tqdm==4.67.1
 For a more detailed list of required libraries, please refer to requirements.txt or environment_full_version.yaml.
 
 # RUN MSIGN
+## Dataset
+- Lppdb : https://zenodo.org/doi/10.5281/zenodo.16018514 (Processed Data)
+- pdbbind : https://www.pdbbind-plus.org.cn/download
+- casf-2013/2016:https://www.pdbbind-plus.org.cn/casf
+- BindingDB : https://www.bindingdb.org/rwd/bind/chemsearch/marvin/Download.jsp
+
 ## Training & Fine-tuning
 Before any training can begin, the compounds need to be preprocessed. Please run the following code:
 ```
