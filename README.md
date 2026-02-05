@@ -82,5 +82,11 @@ python predict_single.py
 ```
 Of course, you can also use `toy_test.ipynb` to understand the complete process required to predict affinity using this model. This project includes a toy example.This version is more readable and easier to use compared to predict_single.py.Its content includes instructions on how to preprocess complex data, generate DGL graph files, and predict binding affinity.
 
+## Test
+You can run the `test.py` file to test the casf-2013/2016 datasets and the PDBBind refined dataset (referred to as casf-2019 in the code).
+```
+python test.py
+```
+
 ## notice
 Please note, you can create new folders and add the corresponding required files to predict the structure you need. Be sure to pre-dock your ligand and receptor files (i.e., 5xr8.pdb); otherwise, arbitrary ligand files cannot be predicted.
